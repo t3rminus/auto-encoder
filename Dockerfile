@@ -3,6 +3,18 @@ FROM phusion/baseimage:0.9.22
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
 
+ENV HOME /root
+ENV DEBIAN_FRONTEND noninteractive
+ENV LC_ALL C.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US.UTF-8
+
+# Configure user nobody to match unRAID's settings
+RUN usermod -u 99 nobody && \
+    usermod -g 100 nobody && \
+    usermod -d /home nobody && \
+    chown -R nobody:users /home
+
 RUN apt-get update
 RUN apt-get install -y python-software-properties
 
@@ -26,4 +38,5 @@ VOLUME /tv
 VOLUME /config
 
 RUN ["npm", "install"]
+USER nobody:users
 ENTRYPOINT ["node", "main.js"]
