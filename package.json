@@ -1,0 +1,28 @@
+{
+  "name": "auto-encoder",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "better-queue": "^3.8.5",
+    "bluebird": "^3.5.0",
+    "chokidar": "^1.7.0",
+    "fs-extra": "^4.0.1",
+    "handbrake-js": "^2.2.2",
+    "lodash": "^4.17.4",
+    "mediainfos": "0.0.1",
+    "mimovie": "^2.0.2",
+    "moviedb": "^0.2.8",
+    "parse-torrent-name": "^0.5.4",
+    "tvmaze-node": "^1.0.4",
+    "unrar": "^0.1.7",
+    "unzipper": "^0.8.9"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Kevin Smith <k3vin.net@gmail.com>",
+  "license": "MIT"
+}
