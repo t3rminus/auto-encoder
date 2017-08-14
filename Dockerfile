@@ -1,11 +1,17 @@
-FROM mhart/alpine-node:6
+FROM phusion/baseimage:0.9.22
 
-RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
-RUN	echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
-ENV	HANDBRAKE_VERSION=1.0.7-r3
-RUN	apk update \
-	&& apk add handbrake=$HANDBRAKE_VERSION \
-	&& rm -rf /var/cache/apk/*
+# Use baseimage-docker's init system.
+CMD ["/sbin/my_init"]
+
+RUN apt-get update
+RUN apt-get install -y python-software-properties
+
+# Probably shouldn't do this but...
+RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
+RUN apt-get install -y nodejs handbrake-cli mediainfo
+
+# Clean up APT when done.
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 ENV DOCKER=1
 WORKDIR "/opt"
