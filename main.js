@@ -54,7 +54,7 @@ class Application {
 			})
 			.then((cfgData) => {
 				if(!cfgData) {
-					return fs.writeFile(this.configFile, JSON.stringify(defaultConfig))
+					return fs.writeFile(this.configFile, JSON.stringify(defaultConfig, null, 4))
 						.then(() => {
 							console.error('Missing or invalid configuration. Restored defaults.');
 							process.exit(1);

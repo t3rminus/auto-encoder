@@ -20,7 +20,7 @@ RUN apt-get install -y python-software-properties
 
 # Probably shouldn't do this but...
 RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
-RUN apt-get install -y nodejs handbrake-cli mediainfo
+RUN apt-get install -y nodejs handbrake-cli mediainfo unzip unrar
 
 # Clean up APT when done.
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
