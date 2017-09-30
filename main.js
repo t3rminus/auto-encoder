@@ -5,6 +5,7 @@ const Path = require('path'),
 	ptn = require('parse-torrent-name'),
 	MediaLookup = require('./lib/medialookup'),
 	EncodeWatcher = require('./lib/encode-watcher'),
+	diacritics = require('./lib/diacritics'),
 	os = require('os'),
 	fs = require('fs-extra');
 
@@ -178,14 +179,23 @@ class Application {
 								.then(episode => { episode.series = series; return episode; });
 						})
 						.then((mediaInfo) => {
-							const epNum = (''+mediaInfo.season) + padLeft(mediaInfo.episode, 2);
-							const sortedName = epNum + ' - ' + mediaInfo.title + ext;
-							const folderName = 'Season ' + mediaInfo.season;
+							const seriesName = this.cleanName(mediaInfo.series.title);
+							const episodeName = this.cleanName(mediaInfo.title);
 							
-							return fs.ensureDir(Path.join(config.tv, mediaInfo.series.title, folderName))
-								.then(() => {
-									return fs.move(file, Path.join(config.tv, mediaInfo.series.title, folderName, sortedName))
-										.then(() => Path.join(mediaInfo.series.title, folderName, sortedName));
+							const epNum = (''+mediaInfo.season) + 'x' + padLeft(mediaInfo.episode, 2);
+							const sortedName = epNum + ' - ' + episodeName + ext;
+							const seasonFolder = 'Season ' + mediaInfo.season;
+							
+							const yearFolder = Path.join(config.tv, seriesName + ' (' + mediaInfo.series.date.getUTCFullYear() + ')');
+							const noYearFolder = Path.join(config.tv, seriesName);
+							return fs.stat(yearFolder)
+								.then(() => yearFolder, () => noYearFolder)
+								.then((seriesFolder) => {
+									return fs.ensureDir(Path.join(seriesFolder, seasonFolder))
+										.then(() => {
+											return fs.move(file, Path.join(seriesFolder, seasonFolder, sortedName))
+											.then(() => Path.join(seriesFolder, seasonFolder, sortedName));
+										});
 								});
 						})
 						.then((name) => {
@@ -197,8 +207,8 @@ class Application {
 				} else if(config.movies) {
 					return this.lookup.getMovie(fileInfo.title, fileInfo.year)
 						.then((mediaInfo) => {
-							const name = mediaInfo.title + ext,
-								yearName = mediaInfo.title + ' (' + mediaInfo.date.getUTCFullYear() +')' + ext;
+							const name = this.cleanName(mediaInfo.title) + ext,
+								yearName = this.cleanName(mediaInfo.title) + ' (' + mediaInfo.date.getUTCFullYear() +')' + ext;
 							return fs.stat(Path.join(config.movies, name))
 								.then(() => true, () => false)
 								.then(exists => {
@@ -220,6 +230,14 @@ class Application {
 				}
 			});
 		});
+	}
+	
+	cleanName(string) {
+		string = diacritics(string);
+		string = string.replace(/\S:\s/g, ' - ');
+		string = string.replace(/\s&\s/g, ' and ');
+		string = string.replace(/[/><:"\\|?*]/g, '');
+		return string;
 	}
 }
 
