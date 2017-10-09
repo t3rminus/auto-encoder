@@ -234,7 +234,7 @@ class Application {
 	
 	cleanName(string) {
 		string = diacritics(string);
-		string = string.replace(/\S:\s/g, ' - ');
+		string = string.replace(/(\S):\s/g, '$1 - ');
 		string = string.replace(/\s&\s/g, ' and ');
 		string = string.replace(/[/><:"\\|?*]/g, '');
 		return string;
