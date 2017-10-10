@@ -38,6 +38,7 @@ class Application {
 		}
 		
 		this.sortCache = [];
+		this.checkCache = [];
 	}
 	
 	init() {
@@ -158,13 +159,32 @@ class Application {
 	}
 	
 	check(file) {
-		return this.getOutputFile(file)
+		const ext = Path.extname(file);
+		const fileName = Path.basename(file, ext);
+		
+		const cached = this.checkCache.find(c => c.fileName === fileName);
+		if(cached) {
+			return cached.output;
+		}
+		
+		const output = this.getOutputFile(file)
 			.then((sortedFile) => {
 				// Check if the sorted result file already exists.
 				return fs.stat(sortedFile);
 			})
 			// If it does, return false (don't process)
-			.then(() => false, () => true);
+			.then(() => {
+				console.info('Ignoring encode for file -- already exists', fileName);
+				return false;
+			})
+			.catch(() => true);
+		
+		if(this.checkCache.length > 300) {
+			this.checkCache = this.checkCache.slice(0, 299);
+		}
+		
+		this.checkCache.push({ fileName: fileName, output: output });
+		return output;
 	}
 	
 	sort(file) {
