@@ -36,6 +36,8 @@ class Application {
 		} else {
 			this.configFile = Path.resolve('config.json');
 		}
+		
+		this.sortCache = [];
 	}
 	
 	init() {
@@ -145,89 +147,145 @@ class Application {
 				minDuration: config.minDuration,
 				deleteWatch: config.deleteWatch,
 				deleteEncode: config.deleteEncode,
-				verbose: config.verbose
+				verbose: config.verbose,
+				outputFormat: config.outputFormat,
+				onAdd: (path) => this.check(path)
 			};
 			
 			this.encoder = new EncodeWatcher(settings);
-			this.encoder.on('encoded', (file) => { this.sort(file); });
+			this.encoder.on('encoded', (file) => this.sort(file) );
 		});
 	}
 	
+	check(file) {
+		return this.getOutputFile(file)
+			.then((sortedFile) => {
+				// Check if the sorted result file already exists.
+				return fs.stat(sortedFile);
+			})
+			// If it does, return false (don't process)
+			.then(() => false, () => true);
+	}
+	
 	sort(file) {
-		this.config.then((config) => {
-			const ext = Path.extname(file);
-			const filename = Path.basename(file, ext);
-			const fileInfo = ptn(filename);
-			
-			let sorted = Bluebird.resolve();
-			if(config.movies) {
-				sorted = sorted.then(() => {
-					return fs.ensureDir(config.movies);
-				});
+		return this.getOutputFile(file)
+			.then(function(resultName) {
+				var path = Path.dirname(resultName);
+				var filename = Path.basename(resultName);
+				
+				return fs.ensureDir(path)
+					.then(() => {
+						fs.move(file, resultName);
+					})
+					.then(() => {
+						console.log('Sorted ', filename);
+					});
+			})
+			.catch((err) => {
+				console.error('An error occurred sorting file', file);
+				console.error(err);
+			});
+	}
+	
+	getOutputFile(path) {
+		const ext = Path.extname(path);
+		const fileName = Path.basename(path, ext);
+		
+		const cached = this.sortCache.find(c => c.fileName === fileName);
+		if(cached) {
+			return cached.output;
+		}
+
+		const output = this.lookupOutputFile(path);
+		
+		if(this.sortCache.length > 300) {
+			this.sortCache = this.sortCache.slice(0, 299);
+		}
+		
+		this.sortCache.push({ fileName: fileName, output: output });
+		return output;
+	}
+	
+	lookupOutputFile(path) {
+		const ext = Path.extname(path);
+		const fileName = Path.basename(path, ext);
+		const fileInfo = ptn(fileName);
+		
+		return this.config.then((config) => {
+			let outputExt = (config.outputFormat || 'mp4');
+			if(!/^\./.test(outputExt)) {
+				outputExt = '.' + outputExt;
 			}
-			if(config.tv) {
-				sorted = sorted.then(() => {
-					return fs.ensureDir(config.tv);
+
+			let result;
+			if(fileInfo.season && fileInfo.episode && config.tv) {
+				result = this.lookup.getTVSeriesOptions(fileInfo.title, fileInfo.year)
+				.then((options) => {
+					if(!options.length) {
+						throw new Error('No TV series matches for ' + fileInfo.title);
+					}
+					
+					const probableOptions = options.filter((o) => o.matchProbability > 0.75)
+					.sort((a,b) => b.matchRanking - a.matchRanking);
+					
+					if(!probableOptions.length) {
+						throw new Error('An error occurred filtering TV series results for ' + fileInfo.title);
+					}
+					
+					const series = probableOptions[0];
+					return this.lookup.getTVEpisode(series.tvMazeId, fileInfo.season, fileInfo.episode)
+					.then(episode => { episode.series = series; return episode; })
+					.then((mediaInfo) => {
+						if(!mediaInfo) {
+							throw new Error('No TV episode matches for ' + fileName);
+						}
+						
+						const seriesName = this.cleanName(mediaInfo.series.title);
+						const episodeName = this.cleanName(mediaInfo.title);
+						
+						const epNum = (''+mediaInfo.season) + 'x' + padLeft(mediaInfo.episode, 2);
+						const sortedName = epNum + ' - ' + episodeName + outputExt;
+						const seasonFolder = 'Season ' + mediaInfo.season;
+						
+						let seriesFolder = Path.join(config.tv, seriesName);
+						if(probableOptions.length > 2) {
+							seriesFolder = Path.join(config.tv, seriesName + ' (' + mediaInfo.series.date.getUTCFullYear() + ')');
+						}
+						
+						return Path.join(seriesFolder, seasonFolder, sortedName);
+					});
 				});
+			} else if(config.movies) {
+				result = this.lookup.getMovieOptions(fileInfo.title, fileInfo.year)
+				.then((options) => {
+					if(!options.length) {
+						throw new Error('No Movie matches for ' + fileInfo.title);
+					}
+					
+					const probableOptions = options.filter((o) => o.matchProbability > 0.75)
+					.sort((a,b) => b.matchRanking - a.matchRanking);
+					
+					if(!probableOptions.length) {
+						throw new Error('An error occurred filtering Movie results for ' + fileInfo.title);
+					}
+					
+					const mediaInfo = probableOptions[0];
+					
+					let name = this.cleanName(mediaInfo.title) + outputExt;
+					if(probableOptions.length > 2) {
+						name = this.cleanName(mediaInfo.title) + ' (' + mediaInfo.date.getUTCFullYear() +')' + outputExt;
+					}
+					
+					return Path.join(config.movies, name);
+				});
+			} else {
+				result = Bluebird.resolve(Path.join(Path.resolve(config.output), fileName + outputExt))
 			}
 			
-			return sorted.then(() => {
-				if(fileInfo.season && fileInfo.episode && config.tv) {
-					return this.lookup.getTVSeries(fileInfo.title)
-						.then(series => {
-							return this.lookup.getTVEpisode(series.tvMazeId, fileInfo.season, fileInfo.episode)
-								.then(episode => { episode.series = series; return episode; });
-						})
-						.then((mediaInfo) => {
-							const seriesName = this.cleanName(mediaInfo.series.title);
-							const episodeName = this.cleanName(mediaInfo.title);
-							
-							const epNum = (''+mediaInfo.season) + 'x' + padLeft(mediaInfo.episode, 2);
-							const sortedName = epNum + ' - ' + episodeName + ext;
-							const seasonFolder = 'Season ' + mediaInfo.season;
-							
-							const yearFolder = Path.join(config.tv, seriesName + ' (' + mediaInfo.series.date.getUTCFullYear() + ')');
-							const noYearFolder = Path.join(config.tv, seriesName);
-							return fs.stat(yearFolder)
-								.then(() => yearFolder, () => noYearFolder)
-								.then((seriesFolder) => {
-									return fs.ensureDir(Path.join(seriesFolder, seasonFolder))
-										.then(() => {
-											return fs.move(file, Path.join(seriesFolder, seasonFolder, sortedName))
-											.then(() => Path.join(seriesFolder, seasonFolder, sortedName));
-										});
-								});
-						})
-						.then((name) => {
-							if(config.verbose) {
-								console.log('Sorted', name);
-							}
-						})
-						.catch(err => console.error(err));
-				} else if(config.movies) {
-					return this.lookup.getMovie(fileInfo.title, fileInfo.year)
-						.then((mediaInfo) => {
-							const name = this.cleanName(mediaInfo.title) + ext,
-								yearName = this.cleanName(mediaInfo.title) + ' (' + mediaInfo.date.getUTCFullYear() +')' + ext;
-							return fs.stat(Path.join(config.movies, name))
-								.then(() => true, () => false)
-								.then(exists => {
-									if(exists) {
-										return fs.move(file, Path.join(config.movies, yearName))
-											.then(() => yearName);
-									} else {
-										return fs.move(file, Path.join(config.movies, name))
-											.then(() => name);
-									}
-								})
-						})
-						.then((name) => {
-							if(config.verbose) {
-								console.log('Sorted', name);
-							}
-						})
-						.catch(err => console.error(err));
-				}
+			return result.catch((err) => {
+				console.error('An error occurred finding info for', fileName + ext);
+				console.error(err);
+				return Path.join(Path.resolve(config.output), fileName + outputExt);
 			});
 		});
 	}
