@@ -190,8 +190,8 @@ class Application {
 	sort(file) {
 		return this.getOutputFile(file)
 			.then(function(resultName) {
-				var path = Path.dirname(resultName);
-				var filename = Path.basename(resultName);
+				const path = Path.dirname(resultName);
+				const filename = Path.basename(resultName);
 				
 				return fs.ensureDir(path)
 					.then(() => {
