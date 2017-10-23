@@ -162,6 +162,11 @@ class Application {
 		const ext = Path.extname(file);
 		const fileName = Path.basename(file, ext);
 		
+		if(/^sample-/.test(fileName)) {
+			console.info('Ignoring encode for file -- sample', fileName);
+			return false;
+		}
+		
 		const cached = this.checkCache.find(c => c.fileName === fileName);
 		if(cached) {
 			return cached.output;
@@ -195,7 +200,7 @@ class Application {
 				
 				return fs.ensureDir(path)
 					.then(() => {
-						fs.move(file, resultName);
+						return fs.move(file, resultName);
 					})
 					.then(() => {
 						console.log('Sorted ', filename);
