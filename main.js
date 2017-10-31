@@ -32,8 +32,10 @@ const defaultConfig = {
 class Application {
 	constructor() {
 		if(process.env.DOCKER) {
+			this.configDir = Path.resolve('/config/');
 			this.configFile = Path.resolve('/config/config.json');
 		} else {
+			this.configDir = Path.resolve('.');
 			this.configFile = Path.resolve('config.json');
 		}
 		
@@ -64,6 +66,9 @@ class Application {
 							process.exit(1);
 						});
 				}
+				
+				// Add config dir
+				cfgData.configDir = this.configDir;
 				
 				// If we're running in docker, ignore these configs
 				// Will be mounted by the docker container
@@ -150,6 +155,7 @@ class Application {
 				deleteEncode: config.deleteEncode,
 				verbose: config.verbose,
 				outputFormat: config.outputFormat,
+				configDir: config.configDir,
 				onAdd: (path) => this.check(path)
 			};
 			
