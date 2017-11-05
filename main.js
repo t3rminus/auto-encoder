@@ -314,8 +314,8 @@ class Application {
 			}
 			
 			return result.catch((err) => {
-				console.error('An error occurred finding info for', fileName + ext);
-				console.error(err);
+				console.error('No info for', fileName + ext);
+				// console.error(err);
 				return Path.join(Path.resolve(config.output), fileName + outputExt);
 			});
 		});
