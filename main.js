@@ -160,7 +160,7 @@ class Application {
 			};
 			
 			this.encoder = new EncodeWatcher(settings);
-			this.encoder.on('encoded', (file) => this.sort(file) );
+			this.encoder.on('encoded', this.sort.bind(this) );
 		});
 	}
 	
@@ -198,24 +198,35 @@ class Application {
 		return output;
 	}
 	
-	sort(file) {
-		return this.getOutputFile(file)
-			.then(function(resultName) {
-				const path = Path.dirname(resultName);
-				const filename = Path.basename(resultName);
-				
-				return fs.ensureDir(path)
-					.then(() => {
-						return fs.move(file, resultName);
-					})
-					.then(() => {
-						console.log('Sorted ', filename);
-					});
-			})
-			.catch((err) => {
-				console.error('An error occurred sorting file', file);
-				console.error(err);
-			});
+	sort(encodedFile, sourceFile) {
+		return this.config.then((config) => {
+			return this.getOutputFile(encodedFile)
+				.then(function(resultName) {
+					const path = Path.dirname(resultName);
+					const filename = Path.basename(resultName);
+
+					if(resultName.indexOf(Path.resolve(config.output))) {
+						console.error('No info for ', filename);
+					}
+					
+					return fs.ensureDir(path)
+						.then(() => {
+							return fs.move(encodedFile, resultName);
+						})
+						.then(() => {
+							if(config.deleteEncode && sourceFile.indexOf(config.encode) === 0) {
+								return fs.unlink(sourceFile).catch(() => { /* ignore errors */ });
+							}
+						})
+						.then(() => {
+							console.log('Sorted ', filename);
+						});
+				})
+				.catch((err) => {
+					console.error('An error occurred sorting file', encodedFile);
+					console.error(err);
+				});
+		});
 	}
 	
 	getOutputFile(path) {
@@ -313,9 +324,7 @@ class Application {
 				result = Bluebird.resolve(Path.join(Path.resolve(config.output), fileName + outputExt))
 			}
 			
-			return result.catch((err) => {
-				console.error('No info for', fileName + ext);
-				// console.error(err);
+			return result.catch(() => {
 				return Path.join(Path.resolve(config.output), fileName + outputExt);
 			});
 		});

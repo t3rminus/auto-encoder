@@ -1,8 +1,9 @@
 {
   "name": "auto-encoder",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "description": "",
   "main": "index.js",
+  "repository": "https://github.com/t3rminus/auto-encoder",
   "dependencies": {
     "better-queue": "^3.8.5",
     "bluebird": "^3.5.0",
@@ -15,7 +16,6 @@
     "moviedb": "^0.2.8",
     "nedb-promise": "^2.0.1",
     "parse-torrent-name": "^0.5.4",
-    "progress": "^2.0.0",
     "tvmaze-node": "^1.0.4",
     "unrar": "^0.1.7",
     "unzipper": "^0.8.9"
