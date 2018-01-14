@@ -17,6 +17,8 @@
     "moviedb": "^0.2.8",
     "nedb-promise": "^2.0.1",
     "parse-torrent-name": "^0.5.4",
+    "request": "^2.83.0",
+    "request-promise": "^4.2.2",
     "tvmaze-node": "^1.0.4",
     "unrar": "^0.1.7",
     "unzipper": "^0.8.9"
