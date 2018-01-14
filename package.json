@@ -9,6 +9,7 @@
     "bluebird": "^3.5.0",
     "chokidar": "^1.7.0",
     "fs-extra": "^4.0.1",
+    "glob-promise": "^3.3.0",
     "handbrake-js": "^2.2.2",
     "lodash": "^4.17.4",
     "mediainfos": "0.0.1",

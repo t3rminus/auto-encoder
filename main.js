@@ -156,11 +156,11 @@ class Application {
 				verbose: config.verbose,
 				outputFormat: config.outputFormat,
 				configDir: config.configDir,
-				onAdd: (path) => this.check(path)
+				onAdd: this.check.bind(this),
+				onDone: this.sort.bind(this)
 			};
 			
 			this.encoder = new EncodeWatcher(settings);
-			this.encoder.on('encoded', this.sort.bind(this) );
 		});
 	}
 	
@@ -169,7 +169,7 @@ class Application {
 		const fileName = Path.basename(file, ext);
 		
 		if(/^sample-/.test(fileName)) {
-			console.info('Ignoring encode for file -- sample', fileName);
+			console.info(`Ignoring encode for file -- likely sample:\n\t${fileName}`);
 			return false;
 		}
 		
@@ -185,7 +185,7 @@ class Application {
 			})
 			// If it does, return false (don't process)
 			.then(() => {
-				console.info('Ignoring encode for file -- already exists', fileName);
+				// console.info('Ignoring encode for file -- already exists', fileName);
 				return false;
 			})
 			.catch(() => true);
@@ -198,15 +198,16 @@ class Application {
 		return output;
 	}
 	
-	sort(encodedFile, sourceFile) {
+	sort(encodedFile) {
 		return this.config.then((config) => {
 			return this.getOutputFile(encodedFile)
 				.then(function(resultName) {
 					const path = Path.dirname(resultName);
 					const filename = Path.basename(resultName);
 
-					if(resultName.indexOf(Path.resolve(config.output))) {
-						console.error('No info for ', filename);
+					if(resultName.indexOf(Path.resolve(config.output)) === 0) {
+						console.error(`No info for:\n\t${filename}`);
+						return Bluebird.delay(100);
 					}
 					
 					return fs.ensureDir(path)
@@ -214,17 +215,13 @@ class Application {
 							return fs.move(encodedFile, resultName);
 						})
 						.then(() => {
-							if(config.deleteEncode && sourceFile.indexOf(config.encode) === 0) {
-								return fs.unlink(sourceFile).catch(() => { /* ignore errors */ });
-							}
-						})
-						.then(() => {
-							console.log('Sorted ', filename);
+							console.log(`Sorted ${filename}`);
 						});
 				})
 				.catch((err) => {
-					console.error('An error occurred sorting file', encodedFile);
+					console.error(`An error occurred sorting file\n\t${encodedFile}`);
 					console.error(err);
+					throw err;
 				});
 		});
 	}
