@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+	<Name Default="Sync">Auto-Encoder</Name>
+	<Overview>
+		Watches for media in a directory (TV Shows and Movies are supported), re-encodes them using handbrake them according to the configuration file.
+	</Overview>
+	<Registry>https://registry.hub.docker.com/u/t3rminus/auto-encoder/</Registry>
+	<Repository>t3rminus/auto-encoder</Repository>
+	<Network>bridge</Network>
+	<Icon>https://www.k3vin.net/misc/auto-encoder-icon.png</Icon>
+	<Category>MediaApp:Video</Category>
+	<Config Type="Path"
+			Name="Config Path"
+			Target="/config"
+			Default="/mnt/user/appdata/auto-encoder"
+			Mode="rw"
+			Description="This is where the config files are stored"
+			Required="true" />
+	<Config Type="Path"
+			Name="Watch Path"
+			Target="/watch"
+			Mode="rw"
+			Description="This is where incoming files are watched"
+			Required="true" />
+	<Config Type="Path"
+			Name="Movies Path"
+			Target="/movies"
+			Mode="rw"
+			Description="Movies will be sorted here" />
+	<Config Type="Path"
+			Name="TV Path"
+			Target="/tv"
+			Mode="rw"
+			Description="TV will be sorted here" />
+	<Config Type="Path"
+			Name="Output Path"
+			Target="/output"
+			Mode="rw"
+			Description="Unknown or unsortable movies/tv will be placed here"
+			Required="true" />
+	<Config Type="Path"
+			Name="Encode Path"
+			Target="/encode"
+			Mode="rw"
+			Description="Media will temporarily be stored here while encoding"
+			Default="/tmp/auto-encoder"
+			Required="true" />
+</Container>

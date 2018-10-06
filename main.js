@@ -273,6 +273,13 @@ class Application {
 					
 					const series = probableOptions[0];
 					return this.lookup.getTVEpisode(series.tvMazeId, fileInfo.season, fileInfo.episode)
+					.catch((err) => {
+						// Maybe the "Season" is by year. Try that?
+						if(err instanceof MediaLookup.NoResultError) {
+							return this.lookup.getTVEpisode(series.tvMazeId, fileInfo.year, fileInfo.episode);
+						}
+						throw err;
+					})
 					.then(episode => { episode.series = series; return episode; })
 					.then((mediaInfo) => {
 						if(!mediaInfo) {
@@ -295,7 +302,7 @@ class Application {
 					});
 				});
 			} else if(config.movies) {
-				result = this.lookup.getMovieOptions(fileInfo.title, fileInfo.year)
+				result = this.lookup.getMovies(fileInfo.title, fileInfo.year)
 				.then((options) => {
 					if(!options.length) {
 						throw new Error('No Movie matches for ' + fileInfo.title);

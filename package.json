@@ -7,21 +7,21 @@
   "dependencies": {
     "better-queue": "^3.8.5",
     "bluebird": "^3.5.0",
-    "chokidar": "^1.7.0",
+    "chokidar": "^2.0.4",
     "fs-extra": "^4.0.1",
     "glob-promise": "^3.3.0",
-    "handbrake-js": "^2.2.2",
-    "lodash": "^4.17.4",
+    "handbrake-js": "^3.0.6",
+    "lodash": "^4.17.11",
     "mediainfos": "0.0.1",
     "mimovie": "^2.0.2",
-    "moviedb": "^0.2.8",
+    "moviedb": "^0.2.10",
     "nedb-promise": "^2.0.1",
     "parse-torrent-name": "^0.5.4",
-    "request": "^2.83.0",
+    "request": "^2.88.0",
     "request-promise": "^4.2.2",
     "tvmaze-node": "^1.0.4",
     "unrar": "^0.1.7",
-    "unzipper": "^0.8.9"
+    "unzipper": "^0.9.3"
   },
   "devDependencies": {},
   "scripts": {
