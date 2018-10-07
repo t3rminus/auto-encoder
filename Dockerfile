@@ -16,7 +16,7 @@ RUN usermod -u 99 nobody && \
     chown -R nobody:users /home
 
 RUN apt-get update
-RUN apt-get install -y python-software-properties
+RUN apt-get install -y software-properties-common
 
 # Probably shouldn't do this but...
 RUN curl -sL https://deb.nodesource.com/setup_8.x | bash -
