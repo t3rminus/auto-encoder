@@ -39,8 +39,8 @@
 			Description="Unknown or unsortable movies/tv will be placed here"
 			Required="true" />
 	<Config Type="Path"
-			Name="Encode Path"
-			Target="/encode"
+			Name="Extract Path"
+			Target="/extract"
 			Mode="rw"
 			Description="Media will temporarily be stored here while encoding"
 			Default="/tmp/auto-encoder"

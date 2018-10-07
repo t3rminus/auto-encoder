@@ -1,4 +1,4 @@
-FROM phusion/baseimage:0.9.22
+FROM phusion/baseimage:0.11
 
 # Use baseimage-docker's init system.
 CMD ["/sbin/my_init"]
@@ -19,7 +19,7 @@ RUN apt-get update
 RUN apt-get install -y python-software-properties
 
 # Probably shouldn't do this but...
-RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
+RUN curl -sL https://deb.nodesource.com/setup_8.x | bash -
 RUN apt-get install -y nodejs handbrake-cli mediainfo unzip unrar
 
 # Clean up APT when done.
@@ -31,7 +31,7 @@ ADD ["main.js", "package.json", "package-lock.json", "/opt/"]
 ADD ["lib", "/opt/lib"]
 
 VOLUME /watch
-VOLUME /encode
+VOLUME /extract
 VOLUME /output
 VOLUME /movies
 VOLUME /tv

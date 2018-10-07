@@ -1,18 +1,10 @@
-'use strict';
-
-const Path = require('path'),
-	Bluebird = require('bluebird'),
-	ptn = require('parse-torrent-name'),
-	MediaLookup = require('./lib/medialookup'),
-	EncodeWatcher = require('./lib/encode-watcher'),
-	diacritics = require('./lib/diacritics'),
-	os = require('os'),
-	fs = require('fs-extra');
-
-const padLeft = function(nr, n, str) { return (new Array(n-String(nr).length+1)).join(str||'0')+nr; };
+const Queue = require('better-queue');
+const Datastore = require('nedb-promise');
+const Path = require('path');
+const fs = require('fs-extra');
+const os = require('os');
 
 const aac = process.platform === 'darwin' ? 'ca_aac' : 'av_aac';
-
 const defaultConfig = {
 	encodingSettings: {
 		quality: 22,
@@ -24,331 +16,198 @@ const defaultConfig = {
 	},
 	preferredLanguage: 'eng',
 	minDuration: 120000,
-	deleteWatch: false,
-	deleteEncode: false,
+	deleteAfterExtracting: false,
+	deleteAfterEncoding: true,
 	verbose: true
 };
 
 class Application {
 	constructor() {
-		if(process.env.DOCKER) {
-			this.configDir = Path.resolve('/config/');
+		this.queue = new Queue(this.process.bind(this), {
+			// Retry at most 2 times
+			maxRetries: 2,
+			// This will ignore repeated queues of the same file
+			merge: (oldTask, newTask, cb) => cb(null, oldTask)
+		});
+		
+		if(process.env.AE_CONFIG_DIR) {
+			this.configDir = Path.resolve(process.env.AE_CONFIG_DIR);
+			this.configFile = Path.resolve(Path.join(process.env.AE_CONFIG_DIR, 'config.json'));
+		} else if(process.env.DOCKER) {
+			this.configDir = Path.resolve('/config');
 			this.configFile = Path.resolve('/config/config.json');
 		} else {
 			this.configDir = Path.resolve('.');
 			this.configFile = Path.resolve('config.json');
 		}
 		
-		this.sortCache = [];
-		this.checkCache = [];
+		this.fileDb = new Datastore({ filename: Path.join(this.configDir, 'files.db'), autoload: true });
+		this.fileDb.ensureIndex({ fieldName: 'path', unique: true }, (err) => {
+			if(err) { console.error(err); process.exit(1); }
+		});
 	}
 	
-	init() {
-		return this.config = fs.ensureFile(this.configFile)
-			.then(() => {
-				return fs.readFile(this.configFile, 'utf8');
-			})
-			.then((data) => {
-				if(!data) {
-					return false;
-				}
+	async run() {
+		this.config = await this.getConfig();
+		this.pipeline = await this.generatePipeline(this.config);
+		
+		const sources = await this.getSources(this.config);
+		
+		for(const source of sources) {
+			source.on('file', async (path) => {
 				try {
-					return JSON.parse(data);
-				} catch(e) {
-					return false;
-				}
-			})
-			.then((cfgData) => {
-				if(!cfgData) {
-					return fs.writeFile(this.configFile, JSON.stringify(defaultConfig, null, 4))
-						.then(() => {
-							console.error('Missing or invalid configuration. Restored defaults.');
-							process.exit(1);
-						});
-				}
-				
-				// Add config dir
-				cfgData.configDir = this.configDir;
-				
-				// If we're running in docker, ignore these configs
-				// Will be mounted by the docker container
-				if(process.env.DOCKER) {
-					cfgData.watch = '/watch';
-					cfgData.encode = '/encode';
-					cfgData.output = '/output';
-					cfgData.movies = '/movies';
-					cfgData.tv = '/tv';
-				}
-				
-				const dirPromises = [];
-				if(!cfgData.watch) {
-					console.error('Missing directory (config.watch)');
-					process.exit(1);
-				}
-				cfgData.watch = Path.resolve(cfgData.watch);
-				dirPromises.push(fs.ensureDir(cfgData.watch));
-				if(!cfgData.encode) {
-					console.error('Missing directory (config.encode)');
-					process.exit(1);
-				}
-				cfgData.encode = Path.resolve(cfgData.encode);
-				dirPromises.push(fs.ensureDir(cfgData.encode));
-				
-				if(cfgData.output && cfgData.movies && cfgData.tv) {
-					cfgData.output = Path.resolve(cfgData.output);
-					dirPromises.push(fs.ensureDir(cfgData.output));
-					cfgData.movies = Path.resolve(cfgData.movies);
-					dirPromises.push(fs.ensureDir(Path.resolve(cfgData.movies)));
-					cfgData.tv = Path.resolve(cfgData.tv);
-					dirPromises.push(fs.ensureDir(Path.resolve(cfgData.tv)));
-				} else if(cfgData.output && cfgData.movies) {
-					cfgData.output = Path.resolve(cfgData.output);
-					dirPromises.push(fs.ensureDir(cfgData.output));
-					cfgData.movies = Path.resolve(cfgData.movies);
-					dirPromises.push(fs.ensureDir(Path.resolve(cfgData.movies)));
-				} else if(cfgData.output && cfgData.tv) {
-					cfgData.output = Path.resolve(cfgData.output);
-					dirPromises.push(fs.ensureDir(cfgData.output));
-					cfgData.tv = Path.resolve(cfgData.tv);
-					dirPromises.push(fs.ensureDir(Path.resolve(cfgData.tv)));
-				} else if(cfgData.tv && cfgData.movies) {
-					cfgData.movies = Path.resolve(cfgData.movies);
-					dirPromises.push(fs.ensureDir(cfgData.movies));
-					cfgData.tv = Path.resolve(cfgData.tv);
-					dirPromises.push(fs.ensureDir(Path.resolve(cfgData.tv)));
-					cfgData.output = os.tmpdir();
-				} else if(cfgData.output) {
-					dirPromises.push(fs.ensureDir(Path.resolve(cfgData.output)));
-				} else {
-					console.error('Missing one or more output directories\n Need config.output, or config.movies and config.tv, or config.output and either config.movies or config.tv');
-					process.exit(1);
-				}
-				
-				return Bluebird.all(dirPromises)
-					.then(() => {
-						cfgData.verbose = cfgData.verbose !== false;
-						return cfgData;
-					})
-					.catch((err) => {
-						console.error('One or more directories could not be made/accessed.');
-						console.error(err);
-						process.exit(1);
-					});
-			});
-	}
-	run() {
-		return this.config.then((config) => {
-			this.lookup = new MediaLookup({
-				mdbApiKey: config.mdbAPIKey || process.env.MDB_API
-			});
-			
-			const settings = {
-				watch: Path.resolve(config.watch),
-				encode: Path.resolve(config.encode),
-				complete: Path.resolve(config.output),
-				encodingSettings: config.encodingSettings,
-				surroundEncodingSettings: config.surroundEncodingSettings,
-				sdEncodingSettings: config.sdEncodingSettings,
-				preferredLanguage: config.preferredLanguage,
-				minDuration: config.minDuration,
-				deleteWatch: config.deleteWatch,
-				deleteEncode: config.deleteEncode,
-				verbose: config.verbose,
-				outputFormat: config.outputFormat,
-				configDir: config.configDir,
-				onAdd: this.check.bind(this),
-				onDone: this.sort.bind(this)
-			};
-			
-			this.encoder = new EncodeWatcher(settings);
-		});
-	}
-	
-	check(file) {
-		const ext = Path.extname(file);
-		const fileName = Path.basename(file, ext);
-		
-		if(/^sample-/.test(fileName)) {
-			console.info(`Ignoring encode for file -- likely sample:\n\t${fileName}`);
-			return false;
-		}
-		
-		const cached = this.checkCache.find(c => c.fileName === fileName);
-		if(cached) {
-			return cached.output;
-		}
-		
-		const output = this.getOutputFile(file)
-			.then((sortedFile) => {
-				// Check if the sorted result file already exists.
-				return fs.stat(sortedFile);
-			})
-			// If it does, return false (don't process)
-			.then(() => {
-				// console.info('Ignoring encode for file -- already exists', fileName);
-				return false;
-			})
-			.catch(() => true);
-		
-		if(this.checkCache.length > 300) {
-			this.checkCache = this.checkCache.slice(0, 299);
-		}
-		
-		this.checkCache.push({ fileName: fileName, output: output });
-		return output;
-	}
-	
-	sort(encodedFile) {
-		return this.config.then((config) => {
-			return this.getOutputFile(encodedFile)
-				.then(function(resultName) {
-					const path = Path.dirname(resultName);
-					const filename = Path.basename(resultName);
-
-					if(resultName.indexOf(Path.resolve(config.output)) === 0) {
-						console.error(`No info for:\n\t${filename}`);
-						return Bluebird.delay(100);
+					// Try to insert it. If it fails (unique key), it's already been processed
+					await this.fileDb.insert({ path });
+					if(this.config.verbose) {
+						console.log(`Queueing ${Path.basename(path)}`);
 					}
-					
-					return fs.ensureDir(path)
-						.then(() => {
-							return fs.move(encodedFile, resultName);
-						})
-						.then(() => {
-							console.log(`Sorted ${filename}`);
-						});
-				})
-				.catch((err) => {
-					console.error(`An error occurred sorting file\n\t${encodedFile}`);
-					console.error(err);
-					throw err;
-				});
-		});
-	}
-	
-	getOutputFile(path) {
-		const ext = Path.extname(path);
-		const fileName = Path.basename(path, ext);
-		
-		const cached = this.sortCache.find(c => c.fileName === fileName);
-		if(cached) {
-			return cached.output;
-		}
-
-		const output = this.lookupOutputFile(path);
-		
-		if(this.sortCache.length > 300) {
-			this.sortCache = this.sortCache.slice(0, 299);
-		}
-		
-		this.sortCache.push({ fileName: fileName, output: output });
-		return output;
-	}
-	
-	lookupOutputFile(path) {
-		const ext = Path.extname(path);
-		const fileName = Path.basename(path, ext);
-		const fileInfo = ptn(fileName);
-		
-		return this.config.then((config) => {
-			let outputExt = (config.outputFormat || 'mp4');
-			if(!/^\./.test(outputExt)) {
-				outputExt = '.' + outputExt;
+					this.queue.push({ id: path, path }, async (err) => {
+						// An error occurred during processing. Remove the key.
+						if(err) {
+							await this.fileDb.remove({ path });
+							console.error('An error occurred processing a file');
+							console.error(err);
+						}
+					});
+				} catch(err) { /* ignore. Assume already processed */ }
+			});
+			
+			try {
+				await source.init();
+			} catch(err) {
+				console.error('An error occurred initializing a source:');
+				console.error(err);
 			}
-
-			let result;
-			if(fileInfo.season && fileInfo.episode && config.tv) {
-				result = this.lookup.getTVSeriesOptions(fileInfo.title, fileInfo.year)
-				.then((options) => {
-					if(!options.length) {
-						throw new Error('No TV series matches for ' + fileInfo.title);
-					}
-					
-					const probableOptions = options.filter((o) => o.matchProbability > 0.75)
-					.sort((a,b) => b.matchRanking - a.matchRanking);
-					
-					if(!probableOptions.length) {
-						throw new Error('An error occurred filtering TV series results for ' + fileInfo.title);
-					}
-					
-					const series = probableOptions[0];
-					return this.lookup.getTVEpisode(series.tvMazeId, fileInfo.season, fileInfo.episode)
-					.catch((err) => {
-						// Maybe the "Season" is by year. Try that?
-						if(err instanceof MediaLookup.NoResultError) {
-							return this.lookup.getTVEpisode(series.tvMazeId, fileInfo.year, fileInfo.episode);
-						}
-						throw err;
-					})
-					.then(episode => { episode.series = series; return episode; })
-					.then((mediaInfo) => {
-						if(!mediaInfo) {
-							throw new Error('No TV episode matches for ' + fileName);
-						}
-						
-						const seriesName = this.cleanName(mediaInfo.series.title);
-						const episodeName = this.cleanName(mediaInfo.title);
-						
-						const epNum = (''+mediaInfo.season) + 'x' + padLeft(mediaInfo.episode, 2);
-						const sortedName = epNum + ' - ' + episodeName + outputExt;
-						const seasonFolder = 'Season ' + mediaInfo.season;
-						
-						let seriesFolder = Path.join(config.tv, seriesName);
-						if(probableOptions.length > 2) {
-							seriesFolder = Path.join(config.tv, seriesName + ' (' + mediaInfo.series.date.getUTCFullYear() + ')');
-						}
-						
-						return Path.join(seriesFolder, seasonFolder, sortedName);
-					});
-				});
-			} else if(config.movies) {
-				result = this.lookup.getMovies(fileInfo.title, fileInfo.year)
-				.then((options) => {
-					if(!options.length) {
-						throw new Error('No Movie matches for ' + fileInfo.title);
-					}
-					
-					const probableOptions = options.filter((o) => o.matchProbability > 0.75)
-					.sort((a,b) => b.matchRanking - a.matchRanking);
-					
-					if(!probableOptions.length) {
-						throw new Error('An error occurred filtering Movie results for ' + fileInfo.title);
-					}
-					
-					const mediaInfo = probableOptions[0];
-					
-					let name = this.cleanName(mediaInfo.title) + outputExt;
-					if(probableOptions.length > 2) {
-						name = this.cleanName(mediaInfo.title) + ' (' + mediaInfo.date.getUTCFullYear() +')' + outputExt;
-					}
-					
-					return Path.join(config.movies, name);
-				});
+		}
+	}
+	
+	process(task, cb) {
+		if(!this.pipeline) {
+			return cb(new Error('Pipeline not ready!'));
+		}
+		
+		this.pipeline([{ path: task.path }]).then((r) => cb(null,r), cb);
+	}
+	
+	async getConfig() {
+		// Load config file
+		let configStr;
+		try {
+			configStr = await fs.readFile(this.configFile, 'utf8');
+		} catch(err) { /* ignore */ }
+		if(!configStr) {
+			return Application.writeDefaultConfig();
+		}
+		
+		// Parse config file
+		let config;
+		try {
+			config = Object.assign({}, JSON.parse(configStr));
+		} catch(err) {
+			console.error('Config data was not a parseable JSON object.\nExiting for safety.');
+			process.exit(1);
+		}
+		
+		// Some defaults
+		config.configDir = this.configDir;
+		config.verbose = config.verbose !== false;
+		
+		// If we're running in docker, or have environment variables
+		// ignore these configs...
+		if(process.env.AE_EXTRACT_DIR) {
+			config.extract = process.env.AE_EXTRACT_DIR;
+		} else if(process.env.DOCKER) {
+			config.extract = '/extract';
+		}
+		if(process.env.AE_OUTPUT_DIR) {
+			config.output = process.env.AE_OUTPUT_DIR;
+		} else if(process.env.DOCKER) {
+			config.output = '/output';
+		}
+		if(process.env.AE_MOVIES_DIR) {
+			config.movies = process.env.AE_MOVIES_DIR;
+		} else if(process.env.DOCKER) {
+			config.movies = '/movies';
+		}
+		if(process.env.AE_TV_DIR) {
+			config.tv = process.env.AE_TV_DIR;
+		} else if(process.env.DOCKER) {
+			config.tv = '/tv';
+		}
+		
+		// Make sure all the directories exist
+		// Need these ones, minimum
+		try {
+			if(config.output) {
+				config.output = Path.resolve(config.output);
+				await fs.ensureDir(config.output);
 			} else {
-				result = Bluebird.resolve(Path.join(Path.resolve(config.output), fileName + outputExt))
+				console.error('Missing output directory (config.output/AE_OUTPUT_DIR)');
+				process.exit(1);
 			}
 			
-			return result.catch(() => {
-				return Path.join(Path.resolve(config.output), fileName + outputExt);
-			});
-		});
+			// These are optional
+			config.extract = Path.resolve(config.extract || Path.join(os.tmpdir(), 'auto-encoder'));
+			await fs.ensureDir(config.extract);
+			
+			if(config.movies) {
+				config.movies = Path.resolve(config.movies);
+				await fs.ensureDir(config.movies);
+			}
+			if(config.tv) {
+				config.tv = Path.resolve(config.tv);
+				await fs.ensureDir(config.tv);
+			}
+		} catch(err) {
+			console.error(`One or more directories couldn't be made/accessed:\n\n${err.message}`);
+			process.exit(1);
+		}
+		
+		return config;
 	}
 	
-	cleanName(string) {
-		string = diacritics(string);
-		string = string.replace(/(\S):\s/g, '$1 - ');
-		string = string.replace(/\s&\s/g, ' and ');
-		string = string.replace(/[/><:"\\|?*]/g, '');
-		return string;
+	static async writeDefaultConfig() {
+		const sampleFile = Path.resolve(Path.join(process.env.CONFIG_DIR, 'config.sample.json'));
+		await fs.writeFile(sampleFile, JSON.stringify(defaultConfig, null, 4));
+		console.error('Missing or invalid configuration.\nA sample configuration has been written to config.sample.js.\nExiting for safety.');
+		process.exit(1);
+	}
+	
+	async generatePipeline(config) {
+		let pipeline = (await fs.readdir(Path.join(__dirname, 'lib', 'pipeline')))
+			.filter(f => /\.js$/.test(f));
+		
+		pipeline.sort((a,b) => parseInt(a, 10) - parseInt(b,10));
+		
+		pipeline = pipeline.map((file) => {
+				const source = require(Path.join(__dirname, 'lib', 'pipeline', file));
+				return new source(config);
+			});
+		
+		return async (items) => {
+			for(const step of pipeline) {
+				items = await step.process(items);
+			}
+			return items;
+		};
+	}
+	
+	async getSources(config) {
+		return (await fs.readdir(Path.join(__dirname, 'lib', 'sources')))
+			.filter(f => /\.js$/.test(f))
+			.map((file) => {
+				const source = require(Path.join(__dirname, 'lib', 'sources', file));
+				return new source(config);
+			});
 	}
 }
 
-const app = new Application();
-app.init()
-	.then(() => {
-		return app.run();
-	})
-	.catch((err) => {
+(async () => {
+	try {
+		await new Application().run();
+	} catch(err) {
+		console.error(`An application error has occurred.`);
 		console.error(err);
 		process.exit(1);
-	});
+	}
+})();
