@@ -58,8 +58,8 @@ class Application {
 				try {
 					// Try to insert it. If it fails (unique key), it's already been processed
 					await this.fileDb.insert({ path });
-					if(this.config.verbose) {
-						console.log(`Queueing ${Path.basename(path)}`);
+					if(this.config.crazy) {
+						console.info(`Queueing ${Path.basename(path)}`);
 					}
 					this.queue.push({ id: path, path }, async (err) => {
 						// An error occurred during processing. Remove the key.
@@ -85,7 +85,13 @@ class Application {
 		if(!this.pipeline) {
 			return cb(new Error('Pipeline not ready!'));
 		}
-		
+		if(this.config.verbose) {
+			console.info(`Starting ${Path.basename(task.path)}`);
+		}
+		if(this.config.silly) {
+			console.info('Queue stats:');
+			console.info(JSON.stringify(this.queue.getStats(),null,4));
+		}
 		this.pipeline([{ path: task.path }]).then((r) => cb(null,r), cb);
 	}
 	
@@ -111,6 +117,7 @@ class Application {
 		// Some defaults
 		config.configDir = this.configDir;
 		config.verbose = config.verbose !== false;
+		config.crazy = false;
 		
 		// If we're running in docker, or have environment variables
 		// ignore these configs...
