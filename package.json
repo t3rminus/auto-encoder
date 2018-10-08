@@ -10,7 +10,6 @@
     "chokidar": "^2.0.4",
     "fs-extra": "^7.0.0",
     "handbrake-js": "^3.0.6",
-    "mimovie": "^2.0.2",
     "moviedb": "^0.2.10",
     "nedb-promise": "^2.0.1",
     "parse-torrent-name": "^0.5.4",

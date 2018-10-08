@@ -15,6 +15,8 @@ RUN usermod -u 99 nobody && \
     usermod -d /home nobody && \
     chown -R nobody:users /home
 
+RUN curl "https://mediaarea.net/repo/deb/repo-mediaarea_1.0-6_all.deb" --output "repo-mediaarea_1.0-6_all.deb"
+RUN dpkg -i "repo-mediaarea_1.0-6_all.deb"
 RUN apt-get update
 RUN apt-get install -y software-properties-common
 
