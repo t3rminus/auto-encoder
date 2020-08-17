@@ -1,13 +1,4 @@
-FROM phusion/baseimage:0.11
-
-# Use baseimage-docker's init system.
-CMD ["/sbin/my_init"]
-
-ENV HOME /root
-ENV DEBIAN_FRONTEND noninteractive
-ENV LC_ALL C.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US.UTF-8
+FROM node:current-buster-slim
 
 # Configure user nobody to match unRAID's settings
 RUN usermod -u 99 nobody && \
@@ -15,14 +6,11 @@ RUN usermod -u 99 nobody && \
     usermod -d /home nobody && \
     chown -R nobody:users /home
 
-RUN curl "https://mediaarea.net/repo/deb/repo-mediaarea_1.0-6_all.deb" --output "repo-mediaarea_1.0-6_all.deb"
-RUN dpkg -i "repo-mediaarea_1.0-6_all.deb"
-RUN apt-get update
-RUN apt-get install -y software-properties-common
+RUN sed -i "s# buster/updates main# buster/updates main contrib non-free#g" /etc/apt/sources.list
+RUN sed -i "s# buster main# buster main contrib non-free#g" /etc/apt/sources.list
 
-# Probably shouldn't do this but...
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash -
-RUN apt-get install -y nodejs handbrake-cli mediainfo unzip unrar
+RUN apt-get update
+RUN apt-get install -y handbrake-cli mediainfo unzip unrar
 
 # Clean up APT when done.
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

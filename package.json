@@ -7,7 +7,7 @@
   "dependencies": {
     "better-queue": "^3.8.10",
     "bluebird": "^3.5.2",
-    "chokidar": "^2.0.4",
+    "chokidar": "^3.4.2",
     "fs-extra": "^7.0.0",
     "handbrake-js": "^3.0.6",
     "moviedb": "^0.2.10",
