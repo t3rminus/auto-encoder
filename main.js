@@ -29,7 +29,7 @@ class Application {
 			// This will ignore repeated queues of the same file
 			merge: (oldTask, newTask, cb) => cb(null, oldTask)
 		});
-		
+
 		if(process.env.AE_CONFIG_DIR) {
 			this.configDir = Path.resolve(process.env.AE_CONFIG_DIR);
 			this.configFile = Path.resolve(Path.join(process.env.AE_CONFIG_DIR, 'config.json'));
@@ -40,22 +40,24 @@ class Application {
 			this.configDir = Path.resolve('.');
 			this.configFile = Path.resolve('config.json');
 		}
-		
+
 		this.fileDb = new Datastore({ filename: Path.join(this.configDir, 'files.db'), autoload: true });
 		this.fileDb.ensureIndex({ fieldName: 'path', unique: true }, (err) => {
 			if(err) { console.error(err); process.exit(1); }
 		});
 	}
-	
+
 	async run() {
 		this.config = await this.getConfig();
 		this.pipeline = await this.generatePipeline(this.config);
-		
+
 		const sources = await this.getSources(this.config);
-		
+
 		for(const source of sources) {
 			source.on('file', async (path) => {
 				try {
+					// Make sure it exists
+					await fs.stat(path); // Make sure the file exists (throws if it doesn't)
 					// Try to insert it. If it fails (unique key), it's already been processed
 					await this.fileDb.insert({ path });
 					if(this.config.crazy) {
@@ -71,7 +73,7 @@ class Application {
 					});
 				} catch(err) { /* ignore. Assume already processed */ }
 			});
-			
+
 			try {
 				await source.init();
 			} catch(err) {
@@ -80,7 +82,7 @@ class Application {
 			}
 		}
 	}
-	
+
 	process(task, cb) {
 		if(!this.pipeline) {
 			return cb(new Error('Pipeline not ready!'));
@@ -94,7 +96,7 @@ class Application {
 		}
 		this.pipeline([{ path: task.path }]).then((r) => cb(null,r), cb);
 	}
-	
+
 	async getConfig() {
 		// Load config file
 		let configStr;
@@ -104,7 +106,7 @@ class Application {
 		if(!configStr) {
 			return Application.writeDefaultConfig();
 		}
-		
+
 		// Parse config file
 		let config;
 		try {
@@ -113,12 +115,12 @@ class Application {
 			console.error('Config data was not a parseable JSON object.\nExiting for safety.');
 			process.exit(1);
 		}
-		
+
 		// Some defaults
 		config.configDir = this.configDir;
 		config.verbose = config.verbose !== false;
 		config.crazy = false;
-		
+
 		// If we're running in docker, or have environment variables
 		// ignore these configs...
 		if(process.env.AE_EXTRACT_DIR) {
@@ -141,7 +143,7 @@ class Application {
 		} else if(process.env.DOCKER) {
 			config.tv = '/tv';
 		}
-		
+
 		// Make sure all the directories exist
 		// Need these ones, minimum
 		try {
@@ -152,11 +154,11 @@ class Application {
 				console.error('Missing output directory (config.output/AE_OUTPUT_DIR)');
 				process.exit(1);
 			}
-			
+
 			// These are optional
 			config.extract = Path.resolve(config.extract || Path.join(os.tmpdir(), 'auto-encoder'));
 			await fs.ensureDir(config.extract);
-			
+
 			if(config.movies) {
 				config.movies = Path.resolve(config.movies);
 				await fs.ensureDir(config.movies);
@@ -169,30 +171,30 @@ class Application {
 			console.error(`One or more directories couldn't be made/accessed:\n\n${err.message}`);
 			process.exit(1);
 		}
-		
+
 		return config;
 	}
-	
+
 	static async writeDefaultConfig() {
 		const sampleFile = Path.resolve(Path.join(process.env.CONFIG_DIR, 'config.sample.json'));
 		await fs.writeFile(sampleFile, JSON.stringify(defaultConfig, null, 4));
 		console.error('Missing or invalid configuration.\nA sample configuration has been written to config.sample.js.\nExiting for safety.');
 		process.exit(1);
 	}
-	
+
 	async generatePipeline(config) {
 		let pipeline = (await fs.readdir(Path.join(__dirname, 'lib', 'pipeline')))
 			.filter(f => /\.js$/.test(f));
-		
+
 		pipeline.sort((a,b) => parseInt(a, 10) - parseInt(b,10));
-		
+
 		pipeline = pipeline.map((file) => {
 				const source = require(Path.join(__dirname, 'lib', 'pipeline', file));
 				return new source(config);
 			});
-		
+
 		console.log(`Generated pipeline:\r\n\t-${pipeline.map(p => p.constructor.name).join("\r\n\t-")}`);
-		
+
 		return async (items) => {
 			for(const step of pipeline) {
 				if(this.config.silly) {
@@ -210,7 +212,7 @@ class Application {
 			return items;
 		};
 	}
-	
+
 	async getSources(config) {
 		return (await fs.readdir(Path.join(__dirname, 'lib', 'sources')))
 			.filter(f => /\.js$/.test(f))
