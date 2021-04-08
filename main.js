@@ -196,20 +196,21 @@ class Application {
 		console.log(`Generated pipeline:\r\n\t-${pipeline.map(p => p.constructor.name).join("\r\n\t-")}`);
 
 		return async (items) => {
+      let curItems = items;
 			for(const step of pipeline) {
 				if(this.config.silly) {
 					console.info(`Pipeline step ${step.constructor.name}`);
-					console.info(`Items to process:\r\n${JSON.stringify(items,null,4)}`);
+					console.info(`Items to process:\r\n${JSON.stringify(curItems,null,4)}`);
 				}
-				if(!items.length) {
+				if(!curItems.length) {
 					if(this.config.silly) {
 						console.log('No items remaining in pipeline. Aborting.');
 					}
 					break;
 				}
-				items = await step.process(items);
+				curItems = await step.process(curItems);
 			}
-			return items;
+			return curItems;
 		};
 	}
 
