@@ -3,6 +3,7 @@ const Datastore = require('nedb-promise');
 const Path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
+const Misc = require('./lib/misc');
 
 const aac = process.platform === 'darwin' ? 'ca_aac' : 'av_aac';
 const defaultConfig = {
@@ -58,7 +59,11 @@ class Application {
 				try {
 					// Make sure it exists
 					await fs.stat(path); // Make sure the file exists (throws if it doesn't)
-					// Try to insert it. If it fails (unique key), it's already been processed
+          // Check and make sure it's a type of file we can handle
+          if(!Misc.isMedia(path) && !Misc.isArchive(path)) {
+            return;
+          }
+          // Try to insert it. If it fails (unique key), it's already been processed
 					await this.fileDb.insert({ path });
 					if(this.config.crazy) {
 						console.info(`Queueing ${Path.basename(path)}`);
@@ -84,6 +89,11 @@ class Application {
 	}
 
 	process(task, cb) {
+    try {
+      await fs.stat(task.path); // Make sure the file exists (throws if it doesn't))
+    } catch(err) {
+      cb(); // Count as complete if the file doesn't exist
+    }
 		if(!this.pipeline) {
 			return cb(new Error('Pipeline not ready!'));
 		}
