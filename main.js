@@ -88,7 +88,7 @@ class Application {
 		}
 	}
 
-	process(task, cb) {
+	async process(task, cb) {
     try {
       await fs.stat(task.path); // Make sure the file exists (throws if it doesn't))
     } catch(err) {
