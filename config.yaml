@@ -1,0 +1,52 @@
+encodingSettings:
+  quality: 22
+  encoder: x264
+  audio: "%t"
+  aencoder: ca_aac
+  mixdown: stereo
+  ab: '192'
+  encoder-preset: veryfast
+
+preferredLanguage: eng
+minDuration: 120000
+verbose: true
+silly: true
+
+mdbAPIKey: c78a04e26f168210570b94691a9dc684
+
+overwrite: true
+deleteAfterExtracting: false
+deleteAfterEncoding: true
+
+watch: "/Users/t3rminus/Projects/auto-encoder/working/watch"
+output: "/Users/t3rminus/Projects/auto-encoder/working/output"
+extract: "/Users/t3rminus/Projects/auto-encoder/working/extract"
+movies: "/Users/t3rminus/Projects/auto-encoder/working/movies"
+tv: "/Users/t3rminus/Projects/auto-encoder/working/tv"
+
+surroundEncodingSettings:
+  audio: "%t,%t"
+  aencoder: ac3,ca_aac
+  ab: '448,192'
+  mixdown: 5point1,dpl2
+
+movieEncodingSettings:
+  quality: 20
+  encoder-preset: medium
+
+tvEncodingSettings:
+  maxHeight: 720
+
+textReplacements:
+- find:
+    regexp: law and order svu
+    flags: i
+  replace: 'Law & Order: SVU'
+- find: What If 2021
+  replace: What If...?
+- find:
+    regexp: whose line is it anyway us
+    flags: i
+  replace: Whose Line is it Anyway
+- find: SAC 2045
+  replace: SAC_2045
