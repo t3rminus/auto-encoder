@@ -3,23 +3,25 @@
   "version": "0.5.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "repository": "https://github.com/t3rminus/auto-encoder",
   "dependencies": {
     "better-queue": "^3.8.10",
     "bluebird": "^3.5.2",
-    "chokidar": "^3.4.2",
+    "chokidar": "^3.5.3",
+    "express": "^4.18.2",
     "fs-extra": "^7.0.0",
-    "handbrake-js": "^3.0.6",
+    "handbrake-js": "^6.0.0",
     "moviedb": "^0.2.10",
-    "nedb-promise": "^2.0.1",
+    "nedb-promises": "^5.0.3",
+    "node-fetch": "^3.1.0",
     "parse-torrent-name": "^0.5.4",
     "request": "^2.88.0",
-    "request-promise": "^4.2.2",
     "tvmaze-node": "^1.0.4",
-    "unrar": "^0.1.7",
-    "unzipper": "^0.9.3"
+    "unrar": "^0.2.0",
+    "unzipper": "^0.10.11",
+    "yaml": "^2.2.1"
   },
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

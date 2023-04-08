@@ -1,5 +1,5 @@
 const Queue = require('better-queue');
-const Datastore = require('nedb-promise');
+const Datastore = require('nedb-promises');
 const Path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
